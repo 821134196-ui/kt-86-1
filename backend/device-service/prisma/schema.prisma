@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  username  String    @unique
+  password  String
+  avatar    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  homeMembers HomeMember[]
+  deviceShares DeviceShare[]
+}
+
+model Home {
+  id        String    @id @default(uuid())
+  name      String
+  description String?
+  avatar    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  members   HomeMember[]
+  rooms     Room[]
+  deviceGroups DeviceGroup[]
+}
+
+model HomeMember {
+  id        String    @id @default(uuid())
+  homeId    String
+  userId    String
+  role      Role      @default(MEMBER)
+  createdAt DateTime  @default(now())
+  home      Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([homeId, userId])
+}
+
+model Room {
+  id        String    @id @default(uuid())
+  name      String
+  homeId    String
+  icon      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  home      Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  devices   Device[]
+}
+
+model DeviceGroup {
+  id        String    @id @default(uuid())
+  name      String
+  homeId    String
+  icon      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  home      Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  devices   Device[]
+}
+
+model DeviceType {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  icon        String?
+  description String?
+  capabilities Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  devices     Device[]
+}
+
+model Device {
+  id            String       @id @default(uuid())
+  name          String
+  deviceTypeId  String
+  roomId        String?
+  deviceGroupId String?
+  homeId        String?
+  status        DeviceStatus @default(UNKNOWN)
+  lastOnline    DateTime?
+  state         Json         @default("{}")
+  metadata      Json         @default("{}")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deviceType    DeviceType   @relation(fields: [deviceTypeId], references: [id], onDelete: Cascade)
+  room          Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  deviceGroup  DeviceGroup? @relation(fields: [deviceGroupId], references: [id], onDelete: SetNull)
+  home          Home?        @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  shares        DeviceShare[]
+}
+
+model DeviceShare {
+  id        String   @id @default(uuid())
+  deviceId  String
+  userId    String
+  canControl Boolean @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([deviceId, userId])
+}

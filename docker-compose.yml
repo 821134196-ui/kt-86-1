@@ -1,0 +1,266 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smart-home-postgres
+    environment:
+      POSTGRES_USER: smarthome
+      POSTGRES_PASSWORD: smarthome123
+      POSTGRES_DB: smarthome
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smarthome"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-home-net
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: smart-home-timescaledb
+    environment:
+      POSTGRES_USER: telemetry
+      POSTGRES_PASSWORD: telemetry123
+      POSTGRES_DB: telemetry
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./infra/timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemetry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-home-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: smart-home-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smart-home-net
+
+  mqtt-broker:
+    image: emqx/emqx:5.3.0
+    container_name: smart-home-mqtt
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8883:8883"
+      - "18083:18083"
+    environment:
+      EMQX_NAME: smart-home-broker
+      EMQX_HOST: 127.0.0.1
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: admin123
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 5s
+      timeout: 25s
+      retries: 5
+    networks:
+      - smart-home-net
+
+  device-service:
+    build:
+      context: ./backend/device-service
+      dockerfile: Dockerfile
+    container_name: smart-home-device-service
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://smarthome:smarthome123@postgres:5432/smarthome
+      REDIS_URL: redis://redis:6379
+      MQTT_BROKER_URL: mqtt://mqtt-broker:1883
+      JWT_SECRET: smart-home-jwt-secret-key-2024
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  gateway-service:
+    build:
+      context: ./backend/gateway-service
+      dockerfile: Dockerfile
+    container_name: smart-home-gateway-service
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://smarthome:smarthome123@postgres:5432/smarthome
+      REDIS_URL: redis://redis:6379
+      MQTT_BROKER_URL: mqtt://mqtt-broker:1883
+      DEVICE_SERVICE_URL: http://device-service:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_healthy
+      device-service:
+        condition: service_started
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  telemetry-service:
+    build:
+      context: ./backend/telemetry-service
+      dockerfile: Dockerfile
+    container_name: smart-home-telemetry-service
+    ports:
+      - "3003:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TIMESCALEDB_URL: postgresql://telemetry:telemetry123@timescaledb:5432/telemetry
+      REDIS_URL: redis://redis:6379
+      MQTT_BROKER_URL: mqtt://mqtt-broker:1883
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  rule-engine:
+    build:
+      context: ./backend/rule-engine
+      dockerfile: Dockerfile
+    container_name: smart-home-rule-engine
+    ports:
+      - "3004:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://smarthome:smarthome123@postgres:5432/smarthome
+      TIMESCALEDB_URL: postgresql://telemetry:telemetry123@timescaledb:5432/telemetry
+      REDIS_URL: redis://redis:6379
+      MQTT_BROKER_URL: mqtt://mqtt-broker:1883
+      DEVICE_SERVICE_URL: http://device-service:3000
+      TELEMETRY_SERVICE_URL: http://telemetry-service:3000
+      GATEWAY_SERVICE_URL: http://gateway-service:3000
+      ALERT_SERVICE_URL: http://alert-service:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      device-service:
+        condition: service_started
+      telemetry-service:
+        condition: service_started
+      gateway-service:
+        condition: service_started
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  alert-service:
+    build:
+      context: ./backend/alert-service
+      dockerfile: Dockerfile
+    container_name: smart-home-alert-service
+    ports:
+      - "3005:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://smarthome:smarthome123@postgres:5432/smarthome
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  web-app:
+    build:
+      context: ./frontend/web-app
+      dockerfile: Dockerfile
+    container_name: smart-home-web-app
+    ports:
+      - "8080:80"
+    environment:
+      - API_BASE_URL=http://localhost:3001
+      - TELEMETRY_API_URL=http://localhost:3003
+      - RULE_ENGINE_URL=http://localhost:3004
+      - ALERT_SERVICE_URL=http://localhost:3005
+    depends_on:
+      - device-service
+      - telemetry-service
+      - rule-engine
+      - alert-service
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+  device-simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: smart-home-device-simulator
+    environment:
+      MQTT_BROKER_URL: mqtt://mqtt-broker:1883
+      DEVICE_SERVICE_URL: http://device-service:3000
+      SIMULATION_SPEED: 1
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+      device-service:
+        condition: service_started
+      gateway-service:
+        condition: service_started
+    networks:
+      - smart-home-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  timescaledb_data:
+  redis_data:
+  emqx_data:
+  emqx_log:
+
+networks:
+  smart-home-net:
+    driver: bridge
