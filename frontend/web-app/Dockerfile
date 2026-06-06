@@ -3,9 +3,15 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+COPY tsconfig.json ./
+COPY tsconfig.node.json ./
+COPY vite.config.ts ./
+COPY index.html ./
 
-COPY . .
+RUN npm install
+
+COPY src ./src
+
 RUN npm run build
 
 FROM nginx:alpine

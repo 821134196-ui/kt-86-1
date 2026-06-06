@@ -1,68 +1,94 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
 
 interface WebSocketOptions {
   url?: string;
   autoConnect?: boolean;
   onMessage?: (data: any) => void;
+  protocols?: string | string[];
 }
 
 export const useWebSocket = (options: WebSocketOptions = {}) => {
   const {
-    url = import.meta.env.VITE_WS_URL || 'ws://localhost:3003',
     autoConnect = true,
     onMessage,
+    protocols,
   } = options;
 
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectCountRef = useRef(0);
 
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+  const buildUrl = useCallback((path: string): string => {
+    if (options.url) {
+      return options.url;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    return `${protocol}//${host}${path}`;
+  }, [options.url]);
 
-    const token = localStorage.getItem('token');
-    const socket = io(url, {
-      transports: ['websocket'],
-      auth: token ? { token } : undefined,
-    });
+  const connect = useCallback((path: string = '/telemetry-ws') => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) return;
 
-    socket.on('connect', () => {
-      setIsConnected(true);
-    });
+    const url = buildUrl(path);
 
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-    });
+    try {
+      const socket = protocols ? new WebSocket(url, protocols) : new WebSocket(url);
 
-    socket.on('telemetry', (data: any) => {
-      setLastMessage(data);
-      onMessage?.(data);
-    });
+      socket.onopen = () => {
+        setIsConnected(true);
+        reconnectCountRef.current = 0;
+      };
 
-    socket.on('alert', (data: any) => {
-      setLastMessage(data);
-      onMessage?.(data);
-    });
+      socket.onclose = (event) => {
+        setIsConnected(false);
+        if (!event.wasClean && reconnectCountRef.current < 10) {
+          reconnectCountRef.current += 1;
+          const delay = Math.min(1000 * Math.pow(2, reconnectCountRef.current), 30000);
+          reconnectTimerRef.current = window.setTimeout(() => {
+            connect(path);
+          }, delay);
+        }
+      };
 
-    socketRef.current = socket;
-  }, [url, onMessage]);
+      socket.onerror = () => {
+        setIsConnected(false);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setLastMessage(data);
+          onMessage?.(data);
+        } catch (e) {
+          setLastMessage(event.data);
+          onMessage?.(event.data);
+        }
+      };
+
+      socketRef.current = socket;
+    } catch (err) {
+      console.error('WebSocket connection error:', err);
+    }
+  }, [buildUrl, protocols, onMessage]);
 
   const disconnect = useCallback(() => {
-    socketRef.current?.disconnect();
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    socketRef.current?.close();
     socketRef.current = null;
     setIsConnected(false);
   }, []);
 
-  const send = useCallback((event: string, data: any) => {
-    socketRef.current?.emit(event, data);
-  }, []);
-
-  const subscribe = useCallback((event: string, callback: (data: any) => void) => {
-    socketRef.current?.on(event, callback);
-    return () => {
-      socketRef.current?.off(event, callback);
-    };
+  const send = useCallback((data: any) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      const payload = typeof data === 'string' ? data : JSON.stringify(data);
+      socketRef.current.send(payload);
+    }
   }, []);
 
   useEffect(() => {
@@ -80,6 +106,5 @@ export const useWebSocket = (options: WebSocketOptions = {}) => {
     connect,
     disconnect,
     send,
-    subscribe,
   };
 };

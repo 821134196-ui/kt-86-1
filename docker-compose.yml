@@ -221,10 +221,10 @@ services:
     ports:
       - "8080:80"
     environment:
-      - API_BASE_URL=http://localhost:3001
-      - TELEMETRY_API_URL=http://localhost:3003
-      - RULE_ENGINE_URL=http://localhost:3004
-      - ALERT_SERVICE_URL=http://localhost:3005
+      - VITE_API_BASE_URL=
+      - VITE_TELEMETRY_API_URL=
+      - VITE_RULE_ENGINE_URL=
+      - VITE_ALERT_SERVICE_URL=
     depends_on:
       - device-service
       - telemetry-service
