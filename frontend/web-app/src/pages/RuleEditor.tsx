@@ -291,7 +291,7 @@ const RuleEditor: React.FC = () => {
                 style={{ width: '100%' }}
                 value={trigger.config.latitude}
                 onChange={(v) =>
-                  setTrigger({ ...trigger, config: { ...trigger.config, latitude: v } })
+                  setTrigger({ ...trigger, config: { ...trigger.config, latitude: typeof v === 'number' ? v : undefined } })
                 }
               />
             </Form.Item>
@@ -302,7 +302,7 @@ const RuleEditor: React.FC = () => {
                 style={{ width: '100%' }}
                 value={trigger.config.longitude}
                 onChange={(v) =>
-                  setTrigger({ ...trigger, config: { ...trigger.config, longitude: v } })
+                  setTrigger({ ...trigger, config: { ...trigger.config, longitude: typeof v === 'number' ? v : undefined } })
                 }
               />
             </Form.Item>
@@ -313,7 +313,7 @@ const RuleEditor: React.FC = () => {
                 style={{ width: '100%' }}
                 value={trigger.config.radius}
                 onChange={(v) =>
-                  setTrigger({ ...trigger, config: { ...trigger.config, radius: v } })
+                  setTrigger({ ...trigger, config: { ...trigger.config, radius: typeof v === 'number' ? v : undefined } })
                 }
               />
             </Form.Item>

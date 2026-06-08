@@ -87,7 +87,7 @@ export const canAccessDevice = async (
     if (isMember) return true;
   }
 
-  const share = device.shares.find((s) => s.userId === userId);
+  const share = device.shares.find((s: { userId: string; canControl: boolean }) => s.userId === userId);
   if (share) {
     if (requireControl) {
       return share.canControl;

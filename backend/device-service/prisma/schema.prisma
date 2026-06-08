@@ -41,6 +41,7 @@ model Home {
   members   HomeMember[]
   rooms     Room[]
   deviceGroups DeviceGroup[]
+  devices   Device[]
 }
 
 model HomeMember {

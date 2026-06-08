@@ -104,8 +104,8 @@ export const deviceService = {
       });
 
       where.OR = [
-        { homeId: { in: userHomes.map((h) => h.homeId) } },
-        { id: { in: sharedDeviceIds.map((d) => d.deviceId) } },
+        { homeId: { in: userHomes.map((h: { homeId: string }) => h.homeId) } },
+        { id: { in: sharedDeviceIds.map((d: { deviceId: string }) => d.deviceId) } },
       ];
     }
 

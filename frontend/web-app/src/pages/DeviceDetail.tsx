@@ -34,7 +34,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useDeviceStore } from '@/store/useDeviceStore';
 import { useTelemetry } from '@/hooks/useTelemetry';
 import TelemetryChart from '@/components/TelemetryChart';
-import { getDeviceTypeName, formatTime, getRooms } from '@/api/auth';
+import { getRooms } from '@/api/auth';
+import { getDeviceTypeName, formatTime } from '@/utils';
 import type { Device, DeviceType, DeviceCapability, Room } from '@/types';
 import dayjs from 'dayjs';
 
@@ -148,7 +149,7 @@ const DeviceDetail: React.FC = () => {
   const handleRoomChange = async (roomId: string | null) => {
     if (!id) return;
     try {
-      await updateDeviceData(id, { roomId });
+      await updateDeviceData(id, { roomId: roomId || undefined });
       message.success('房间已更新');
     } catch {
       message.error('更新失败');
@@ -207,7 +208,6 @@ const DeviceDetail: React.FC = () => {
                   <div>
                     <div style={{ marginBottom: 8, color: '#666' }}>电源开关</div>
                     <Switch
-                      size="large"
                       checked={!!isOn}
                       onChange={handleToggle}
                       disabled={device.status === 'offline'}

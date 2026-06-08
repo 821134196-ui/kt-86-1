@@ -58,7 +58,7 @@ const TelemetryChart: React.FC<TelemetryChartProps> = ({
       case 'column':
         return <Column {...commonConfig} columnStyle={{ fill: color, fillOpacity: 0.8 }} />;
       case 'area':
-        return <Area {...commonConfig} areaStyle={{ fill: color, fillOpacity: 0.2 }} />;
+        return <Area {...commonConfig} />;
       case 'line':
       default:
         return <Line {...commonConfig} />;

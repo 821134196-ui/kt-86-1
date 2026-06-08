@@ -12,7 +12,7 @@ const createServiceClient = (baseURL: string, serviceName: string): AxiosInstanc
   });
 
   client.interceptors.request.use((request) => {
-    logger.debug(`${serviceName} request', {
+    logger.debug(`${serviceName} request`, {
       method: request.method,
       url: request.url,
     });
@@ -23,10 +23,10 @@ const createServiceClient = (baseURL: string, serviceName: string): AxiosInstanc
     (response) => response,
     (error) => {
       logger.error(`${serviceName} request failed`, {
-      url: error.config?.url,
-      status: error.response?.status,
-      message: error.message,
-    });
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.message,
+      });
       return Promise.reject(error);
     }
   );

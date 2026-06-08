@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { config, AggregationLevel } from '../config';
 import { logger } from '../utils/logger';
-import { TelemetryData, AggregatedTelemetry, ThresholdAlert } from '../types';
+import { TelemetryData, ThresholdAlert } from '../types';
 
 class TimescaleDB {
   private pool: Pool;

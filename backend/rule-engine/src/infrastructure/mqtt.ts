@@ -1,4 +1,4 @@
-import mqtt, { MqttClient } from 'mqtt';
+import mqtt, { MqttClient as MqttClientType, IClientOptions } from 'mqtt';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { EventEmitter } from 'events';
@@ -10,18 +10,19 @@ export interface TelemetryMessage {
   timestamp: Date;
 }
 
-class MqttClient extends EventEmitter {
-  private client: MqttClient | null = null;
+class MqttService extends EventEmitter {
+  private client: MqttClientType | null = null;
   private isConnected = false;
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.client = mqtt.connect(config.mqttBrokerUrl, {
+        const options: IClientOptions = {
           reconnectPeriod: 5000,
           connectTimeout: 30000,
           clientId: `rule-engine-${Math.random().toString(16).substring(2, 10)}`,
-        });
+        };
+        this.client = mqtt.connect(config.mqttBrokerUrl, options);
 
         this.client.on('connect', () => {
           this.isConnected = true;
@@ -30,7 +31,7 @@ class MqttClient extends EventEmitter {
           resolve();
         });
 
-        this.client.on('error', (err) => {
+        this.client.on('error', (err: Error) => {
           logger.error('MQTT error', { error: err.message });
           if (!this.isConnected) {
             reject(err);
@@ -46,7 +47,7 @@ class MqttClient extends EventEmitter {
           logger.warn('MQTT connection closed');
         });
 
-        this.client.on('message', (topic, message) => {
+        this.client.on('message', (topic: string, message: Buffer) => {
           this.handleMessage(topic, message);
         });
       } catch (error) {
@@ -55,26 +56,28 @@ class MqttClient extends EventEmitter {
     });
   }
 
-  private subscribeToTopics() {
+  private subscribeToTopics(): void {
     if (!this.client) {
-      this.client.subscribe(config.mqttTopics.telemetryPrefix, (err) => {
-        if (err) {
-          logger.error('Failed to subscribe to telemetry topic', { error: err.message });
-        } else {
-          logger.info('Subscribed to telemetry topic', { topic: config.mqttTopics.telemetryPrefix });
-        }
-      });
-      this.client.subscribe(config.mqttTopics.deviceState, (err) => {
-        if (err) {
-          logger.error('Failed to subscribe to device state topic', { error: err.message });
-        } else {
-          logger.info('Subscribed to device state topic', { topic: config.mqttTopics.deviceState });
-        }
-      });
+      logger.warn('MQTT client not initialized, cannot subscribe');
+      return;
     }
+    this.client.subscribe(config.mqttTopics.telemetryPrefix, (err: Error | null) => {
+      if (err) {
+        logger.error('Failed to subscribe to telemetry topic', { error: err.message });
+      } else {
+        logger.info('Subscribed to telemetry topic', { topic: config.mqttTopics.telemetryPrefix });
+      }
+    });
+    this.client.subscribe(config.mqttTopics.deviceState, (err: Error | null) => {
+      if (err) {
+        logger.error('Failed to subscribe to device state topic', { error: err.message });
+      } else {
+        logger.info('Subscribed to device state topic', { topic: config.mqttTopics.deviceState });
+      }
+    });
   }
 
-  private handleMessage(topic: string, message: Buffer) {
+  private handleMessage(topic: string, message: Buffer): void {
     try {
       const topicParts = topic.split('/');
       const payload = JSON.parse(message.toString());
@@ -95,7 +98,7 @@ class MqttClient extends EventEmitter {
     } catch (error: any) {
       logger.error('Failed to parse MQTT message', {
         topic,
-        error: error.message,
+        error: error?.message || String(error),
       });
     }
   }
@@ -107,7 +110,7 @@ class MqttClient extends EventEmitter {
         return;
       }
       const payload = typeof message === 'object' ? JSON.stringify(message) : message;
-      this.client.publish(topic, payload, (err) => {
+      this.client.publish(topic, payload, (err?: Error | null) => {
         if (err) reject(err);
         else resolve();
       });
@@ -115,10 +118,19 @@ class MqttClient extends EventEmitter {
   }
 
   async close(): Promise<void> {
-    if (this.client) {
-      this.client.end(true);
-    }
+    return new Promise((resolve) => {
+      if (this.client) {
+        this.client.end(false, {}, () => {
+          this.isConnected = false;
+          this.client = null;
+          logger.info('MQTT client closed');
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
   }
 }
 
-export const mqttClient = new MqttClient();
+export const mqttClient = new MqttService();

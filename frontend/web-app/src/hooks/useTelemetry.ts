@@ -24,7 +24,7 @@ export const useTelemetry = (deviceId?: string) => {
     [deviceId, updateDeviceState]
   );
 
-  const { subscribe } = useWebSocket({ onMessage: handleMessage });
+  useWebSocket({ onMessage: handleMessage });
 
   const fetchLatest = useCallback(async () => {
     if (!deviceId) return;
@@ -65,6 +65,5 @@ export const useTelemetry = (deviceId?: string) => {
     loading,
     fetchLatest,
     fetchHistory,
-    subscribe,
   };
 };

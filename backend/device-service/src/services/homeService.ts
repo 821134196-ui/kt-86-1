@@ -141,7 +141,7 @@ export const homeMemberService = {
       },
     });
 
-    return members.map((m) => ({
+    return members.map((m: any) => ({
       id: m.id,
       role: m.role,
       joinedAt: m.createdAt,

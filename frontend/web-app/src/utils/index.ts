@@ -1,5 +1,8 @@
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import type { DeviceType, AlertSeverity } from '@/types';
+
+dayjs.extend(relativeTime);
 
 export const getDeviceIcon = (type: DeviceType): string => {
   const iconMap: Record<DeviceType, string> = {
